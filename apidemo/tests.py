@@ -8,6 +8,7 @@ import sys
 import urllib.request
 from django.test import SimpleTestCase
 
+from .router.api import PRINT
 
 class SleepApiTests(SimpleTestCase):
     def test_sleep_endpoint_waits_and_returns_timing_fields(self):
@@ -128,7 +129,7 @@ class SleepApiTests(SimpleTestCase):
             sock.bind(("127.0.0.1", 0))
             return sock.getsockname()[1]
 
-    def _start_uvicorn(self, port, print_output=True):
+    def _start_uvicorn(self, port, print_output=PRINT):
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
         return subprocess.Popen(
