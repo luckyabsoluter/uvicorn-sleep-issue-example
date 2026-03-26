@@ -128,7 +128,7 @@ class SleepApiTests(SimpleTestCase):
             sock.bind(("127.0.0.1", 0))
             return sock.getsockname()[1]
 
-    def _start_uvicorn(self, port):
+    def _start_uvicorn(self, port, print_output=True):
         env = os.environ.copy()
         env.setdefault("PYTHONUNBUFFERED", "1")
         return subprocess.Popen(
@@ -144,8 +144,8 @@ class SleepApiTests(SimpleTestCase):
             ],
             cwd=os.path.dirname(os.path.dirname(__file__)),
             env=env,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            stdout=sys.stdout if print_output else subprocess.DEVNULL,
+            stderr=sys.stderr if print_output else subprocess.DEVNULL,
         )
 
     def _wait_for_server_ready(self, port):
