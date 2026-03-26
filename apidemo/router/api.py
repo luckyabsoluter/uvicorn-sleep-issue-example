@@ -14,3 +14,7 @@ def sleep(request):
     end = time.time()
     print(f"Finished sleeping. thread: {threading.current_thread().name}")
     return {"start": start, "end": end, "duration": end - start}
+
+@api.get("/async-sleep")
+async def async_sleep(request):
+    return sleep(request)
