@@ -21,6 +21,18 @@ class SleepApiTests(SimpleTestCase):
         self.assertGreaterEqual(payload["duration"], 1.0)
         self.assertGreaterEqual(payload["end"] - payload["start"], 1.0)
         self.assertGreaterEqual(ended_at - started_at, 1.0)
+
+    def test_async_sleep_endpoint_waits_and_returns_timing_fields(self):
+        started_at = time.time()
+        response = self.client.get("/api/async-sleep")
+        ended_at = time.time()
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(payload.keys()), {"start", "end", "duration"})
+        self.assertGreaterEqual(payload["duration"], 1.0)
+        self.assertGreaterEqual(payload["end"] - payload["start"], 1.0)
+        self.assertGreaterEqual(ended_at - started_at, 1.0)
     
     def test_sleep_endpoint_concurrent_requests(self):
         start = time.time()
@@ -46,7 +58,44 @@ class SleepApiTests(SimpleTestCase):
         elapsed_time = end - start
         print(f"Total elapsed time for {request_count} requests: {elapsed_time:.2f} seconds")
 
+    def test_async_sleep_endpoint_concurrent_requests(self):
+        start = time.time()
+
+        request_count = 5
+
+        def fetch_api():
+            return self.client.get("/api/async-sleep")
+
+        responses = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=request_count) as executor:
+            futures = [executor.submit(fetch_api) for _ in range(request_count)]
+
+            for future in concurrent.futures.as_completed(futures):
+                responses.append(future.result())
+
+        self.assertEqual(len(responses), request_count)
+        for response in responses:
+            self.assertEqual(response.status_code, 200)
+
+        end = time.time()
+        elapsed_time = end - start
+        print(f"Total elapsed time for {request_count} async requests: {elapsed_time:.2f} seconds")
+
     def test_sleep_endpoint_concurrent_requests_via_uvicorn(self):
+        elapsed_time = self._run_concurrent_uvicorn_requests("api/sleep")
+        print(f"Total elapsed time for 5 uvicorn sleep requests: {elapsed_time:.2f} seconds")
+
+    def test_async_sleep_endpoint_concurrent_requests_via_uvicorn(self):
+        elapsed_time = self._run_concurrent_uvicorn_requests("api/async-sleep")
+        print(f"Total elapsed time for 5 uvicorn async-sleep requests: {elapsed_time:.2f} seconds")
+
+    def _fetch_json_from_uvicorn(self, path, port):
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/{path}", timeout=30) as response:
+            self.assertEqual(response.status, 200)
+            return json.loads(response.read())
+
+    def _run_concurrent_uvicorn_requests(self, path):
         request_count = 5
         port = self._find_free_port()
         process = self._start_uvicorn(port)
@@ -58,7 +107,7 @@ class SleepApiTests(SimpleTestCase):
             with concurrent.futures.ThreadPoolExecutor(max_workers=request_count) as executor:
                 responses = list(
                     executor.map(
-                        lambda _: self._fetch_json_from_uvicorn("api/sleep", port),
+                        lambda _: self._fetch_json_from_uvicorn(path, port),
                         range(request_count),
                     )
                 )
@@ -69,17 +118,10 @@ class SleepApiTests(SimpleTestCase):
                 self.assertEqual(set(payload.keys()), {"start", "end", "duration"})
                 self.assertGreaterEqual(payload["duration"], 1.0)
 
-            print(
-                f"Total elapsed time for {request_count} uvicorn requests: {elapsed_time:.2f} seconds"
-            )
+            return elapsed_time
         finally:
             process.terminate()
             process.wait(timeout=10)
-
-    def _fetch_json_from_uvicorn(self, path, port):
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/{path}", timeout=30) as response:
-            self.assertEqual(response.status, 200)
-            return json.loads(response.read())
 
     def _find_free_port(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
